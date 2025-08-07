@@ -21,7 +21,7 @@ const Room: React.FC<RoomProps> = ({ user }) => {
       return;
     }
 
-    // Set up socket event listeners first
+    // Set up socket event listeners
     socketService.onRoomJoined((data) => {
       setMessages(data.messages);
       setUsers(data.users);
