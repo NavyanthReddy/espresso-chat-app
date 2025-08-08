@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { User, RoomSummary } from '../types';
 import { socketService } from '../services/socket';
+import JoinedRooms from '../components/JoinedRooms';
 
 interface HomeProps {
   user: User;
@@ -65,6 +66,9 @@ const Home: React.FC<HomeProps> = ({ user }) => {
         <h1 className="text-3xl font-bold text-gray-900 mb-2">Welcome, {user.name}!</h1>
         <p className="text-gray-600">Join a room or create a new one to start chatting.</p>
       </div>
+
+      {/* My Joined Rooms */}
+      <JoinedRooms user={user} />
 
       {/* Create Room */}
       <div className="bg-white rounded-lg shadow p-6 mb-8">

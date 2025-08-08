@@ -47,6 +47,16 @@ class SocketService {
     this.socket?.emit('join_room', { roomId, user });
   }
 
+  // Leave a room
+  leaveRoom(roomId: string): void {
+    this.socket?.emit('leave_room', roomId);
+  }
+
+  // Get user's joined rooms
+  getMyRooms(): void {
+    this.socket?.emit('get_my_rooms');
+  }
+
   // Send a message
   sendMessage(text: string, roomId: string, user: User): void {
     this.socket?.emit('send_message', { text, roomId, user });
@@ -91,6 +101,10 @@ class SocketService {
     this.socket?.on('room_added', callback);
   }
 
+  onMyRooms(callback: (rooms: Room[]) => void): void {
+    this.socket?.on('my_rooms', callback);
+  }
+
   onError(callback: (error: { message: string }) => void): void {
     this.socket?.on('error', callback);
   }
@@ -122,6 +136,10 @@ class SocketService {
 
   offRoomAdded(): void {
     this.socket?.off('room_added');
+  }
+
+  offMyRooms(): void {
+    this.socket?.off('my_rooms');
   }
 
   offError(): void {

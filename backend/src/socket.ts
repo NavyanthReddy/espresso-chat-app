@@ -1,19 +1,15 @@
 import { Server as SocketIOServer } from 'socket.io';
 import { Server as HTTPServer } from 'http';
-import { User, Message, Room, AuthenticatedSocket, JoinRoomPayload, SendMessagePayload, ServerState } from './types';
-
-// In-memory storage
-const serverState: ServerState = {
-  rooms: new Map<string, Room>(),
-  users: new Map<string, User>()
-};
+import { User, Message, Room, JoinRoomPayload, SendMessagePayload } from './types';
+import { databaseService } from './database';
+import { v4 as uuidv4 } from 'uuid';
 
 // Helper functions
 const generateId = (): string => {
-  return Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+  return uuidv4();
 };
 
-const createRoom = (name: string): Room => {
+const createRoom = async (name: string): Promise<Room> => {
   const room: Room = {
     id: generateId(),
     name,
@@ -21,14 +17,8 @@ const createRoom = (name: string): Room => {
     messages: [],
     createdAt: new Date()
   };
-  serverState.rooms.set(room.id, room);
+  await databaseService.createRoom(room);
   return room;
-};
-
-const getUserRooms = (userId: string): Room[] => {
-  return Array.from(serverState.rooms.values()).filter(room => 
-    room.users.has(userId)
-  );
 };
 
 export const setupSocketIO = (server: HTTPServer) => {
@@ -39,145 +29,246 @@ export const setupSocketIO = (server: HTTPServer) => {
     }
   });
 
-  io.on('connection', (socket: AuthenticatedSocket) => {
+  io.on('connection', (socket) => {
     console.log(`User connected: ${socket.id}`);
 
+    // Track user's joined rooms
+    (socket as any).joinedRooms = new Set<string>();
+
     // Handle user authentication
-    socket.on('authenticate', (user: User) => {
-      socket.user = {
-        ...user,
-        socketId: socket.id
-      };
-      serverState.users.set(user.id, socket.user);
-      console.log(`User authenticated: ${user.name}`);
+    socket.on('authenticate', async (user: User) => {
+      try {
+        const authenticatedUser = {
+          ...user,
+          socketId: socket.id
+        };
+        
+        await databaseService.createUser(authenticatedUser);
+        (socket as any).user = authenticatedUser;
+        console.log(`User authenticated: ${user.name}`);
+      } catch (error) {
+        console.error('Authentication error:', error);
+        socket.emit('error', { message: 'Authentication failed' });
+      }
     });
 
     // Handle joining a room
-    socket.on('join_room', (payload: JoinRoomPayload) => {
-      if (!socket.user) {
-        socket.emit('error', { message: 'User not authenticated' });
-        return;
-      }
+    socket.on('join_room', async (payload: JoinRoomPayload) => {
+      try {
+        const { roomId, user } = payload;
+        const socketUser = (socket as any).user;
+        
+        if (!socketUser) {
+          socket.emit('error', { message: 'User not authenticated' });
+          return;
+        }
 
-      const { roomId, user } = payload;
-      let room = serverState.rooms.get(roomId);
+        let room = await databaseService.getRoom(roomId);
 
-      // Create room if it doesn't exist
-      if (!room) {
-        room = createRoom(roomId);
-      }
+        // Create room if it doesn't exist
+        if (!room) {
+          room = await createRoom(roomId);
+        }
 
-      // Leave current room if any
-      if (socket.currentRoom) {
-        socket.leave(socket.currentRoom);
-        const currentRoom = serverState.rooms.get(socket.currentRoom);
-        if (currentRoom) {
-          currentRoom.users.delete(socket.user.id);
-          socket.to(socket.currentRoom).emit('user_left', {
-            user: socket.user,
-            roomId: socket.currentRoom
+        // Check if user is already in this room
+        if ((socket as any).joinedRooms.has(roomId)) {
+          socket.emit('error', { message: 'User already in this room' });
+          return;
+        }
+
+        // Join the room
+        socket.join(roomId);
+        (socket as any).joinedRooms.add(roomId);
+        
+        // Add user to room in database
+        await databaseService.addUserToRoom(roomId, socketUser.id);
+
+        // Get updated room data
+        const updatedRoom = await databaseService.getRoom(roomId);
+        if (updatedRoom) {
+          const users = await databaseService.getRoomUsers(roomId);
+          const messages = await databaseService.getRoomMessages(roomId);
+
+          // Send room info to the user
+          socket.emit('room_joined', {
+            room: updatedRoom,
+            messages,
+            users
+          });
+
+          // Notify other users in the room
+          socket.to(roomId).emit('user_joined', {
+            user: socketUser,
+            roomId
           });
         }
+
+        console.log(`User ${socketUser.name} joined room: ${roomId}`);
+      } catch (error) {
+        console.error('Join room error:', error);
+        socket.emit('error', { message: 'Failed to join room' });
       }
+    });
 
-      // Join new room
-      socket.join(roomId);
-      socket.currentRoom = roomId;
-      
-      // Only add user if not already in the room
-      if (!room.users.has(socket.user.id)) {
-        room.users.set(socket.user.id, socket.user);
+    // Handle leaving a room
+    socket.on('leave_room', async (roomId: string) => {
+      try {
+        const socketUser = (socket as any).user;
+        
+        if (!socketUser) {
+          socket.emit('error', { message: 'User not authenticated' });
+          return;
+        }
+
+        if (!(socket as any).joinedRooms.has(roomId)) {
+          socket.emit('error', { message: 'User not in this room' });
+          return;
+        }
+
+        // Leave the room
+        socket.leave(roomId);
+        (socket as any).joinedRooms.delete(roomId);
+        
+        // Remove user from room in database
+        await databaseService.removeUserFromRoom(roomId, socketUser.id);
+
+        // Notify other users in the room
+        socket.to(roomId).emit('user_left', {
+          user: socketUser,
+          roomId
+        });
+
+        console.log(`User ${socketUser.name} left room: ${roomId}`);
+      } catch (error) {
+        console.error('Leave room error:', error);
+        socket.emit('error', { message: 'Failed to leave room' });
       }
-
-      // Send room info to the user
-      socket.emit('room_joined', {
-        room,
-        messages: room.messages,
-        users: Array.from(room.users.values())
-      });
-
-      // Notify other users in the room
-      socket.to(roomId).emit('user_joined', {
-        user: socket.user,
-        roomId
-      });
-
-      console.log(`User ${socket.user.name} joined room: ${roomId}`);
     });
 
     // Handle sending messages
-    socket.on('send_message', (payload: SendMessagePayload) => {
-      if (!socket.user || !socket.currentRoom) {
-        socket.emit('error', { message: 'User not in a room' });
-        return;
+    socket.on('send_message', async (payload: SendMessagePayload) => {
+      try {
+        const { text, roomId } = payload;
+        const socketUser = (socket as any).user;
+        
+        if (!socketUser) {
+          socket.emit('error', { message: 'User not authenticated' });
+          return;
+        }
+
+        if (!(socket as any).joinedRooms.has(roomId)) {
+          socket.emit('error', { message: 'User not in this room' });
+          return;
+        }
+
+        const room = await databaseService.getRoom(roomId);
+        if (!room) {
+          socket.emit('error', { message: 'Room not found' });
+          return;
+        }
+
+        const message: Message = {
+          id: generateId(),
+          text,
+          user: socketUser,
+          timestamp: new Date(),
+          roomId
+        };
+
+        // Add message to database
+        await databaseService.addMessage(message);
+
+        // Broadcast message to all users in the room
+        io.to(roomId).emit('message_received', message);
+
+        console.log(`Message sent in room ${roomId}: ${text}`);
+      } catch (error) {
+        console.error('Send message error:', error);
+        socket.emit('error', { message: 'Failed to send message' });
       }
-
-      const { text, roomId } = payload;
-      const room = serverState.rooms.get(roomId);
-
-      if (!room) {
-        socket.emit('error', { message: 'Room not found' });
-        return;
-      }
-
-      const message: Message = {
-        id: generateId(),
-        text,
-        user: socket.user,
-        timestamp: new Date(),
-        roomId
-      };
-
-      // Add message to room history
-      room.messages.push(message);
-
-      // Broadcast message to all users in the room
-      io.to(roomId).emit('message_received', message);
-
-      console.log(`Message sent in room ${roomId}: ${text}`);
     });
 
     // Handle getting room list
-    socket.on('get_rooms', () => {
-      const rooms = Array.from(serverState.rooms.values()).map(room => ({
-        id: room.id,
-        name: room.name,
-        userCount: room.users.size,
-        createdAt: room.createdAt
-      }));
-      socket.emit('rooms_list', rooms);
+    socket.on('get_rooms', async () => {
+      try {
+        const rooms = await databaseService.getAllRooms();
+        socket.emit('rooms_list', rooms);
+      } catch (error) {
+        console.error('Get rooms error:', error);
+        socket.emit('error', { message: 'Failed to get rooms' });
+      }
+    });
+
+    // Handle getting user's joined rooms
+    socket.on('get_my_rooms', async () => {
+      try {
+        const socketUser = (socket as any).user;
+        
+        if (!socketUser) {
+          socket.emit('error', { message: 'User not authenticated' });
+          return;
+        }
+
+        const joinedRooms = Array.from((socket as any).joinedRooms) as string[];
+        const roomDetails = await Promise.all(
+          joinedRooms.map(async (roomId: string) => {
+            const room = await databaseService.getRoom(roomId);
+            if (room) {
+              const users = await databaseService.getRoomUsers(roomId);
+              return {
+                ...room,
+                users: Array.from(users)
+              };
+            }
+            return null;
+          })
+        );
+
+        socket.emit('my_rooms', roomDetails.filter(room => room !== null));
+      } catch (error) {
+        console.error('Get my rooms error:', error);
+        socket.emit('error', { message: 'Failed to get user rooms' });
+      }
     });
 
     // Handle creating a new room
-    socket.on('create_room', (roomName: string) => {
-      const room = createRoom(roomName);
-      socket.emit('room_created', room);
-      io.emit('room_added', {
-        id: room.id,
-        name: room.name,
-        userCount: 0,
-        createdAt: room.createdAt
-      });
+    socket.on('create_room', async (roomName: string) => {
+      try {
+        const room = await createRoom(roomName);
+        socket.emit('room_created', room);
+        io.emit('room_added', {
+          id: room.id,
+          name: room.name,
+          userCount: 0,
+          createdAt: room.createdAt
+        });
+      } catch (error) {
+        console.error('Create room error:', error);
+        socket.emit('error', { message: 'Failed to create room' });
+      }
     });
 
     // Handle disconnection
-    socket.on('disconnect', () => {
-      if (socket.user) {
-        // Remove user from current room
-        if (socket.currentRoom) {
-          const room = serverState.rooms.get(socket.currentRoom);
-          if (room) {
-            room.users.delete(socket.user.id);
-            socket.to(socket.currentRoom).emit('user_left', {
-              user: socket.user,
-              roomId: socket.currentRoom
+    socket.on('disconnect', async () => {
+      try {
+        const socketUser = (socket as any).user;
+        if (socketUser) {
+          // Remove user from all joined rooms
+          const joinedRooms = Array.from((socket as any).joinedRooms) as string[];
+          for (const roomId of joinedRooms) {
+            await databaseService.removeUserFromRoom(roomId, socketUser.id);
+            socket.to(roomId).emit('user_left', {
+              user: socketUser,
+              roomId
             });
           }
-        }
 
-        // Remove user from global users list
-        serverState.users.delete(socket.user.id);
-        console.log(`User disconnected: ${socket.user.name}`);
+          // Remove user from database
+          await databaseService.deleteUser(socketUser.id);
+          console.log(`User disconnected: ${socketUser.name}`);
+        }
+      } catch (error) {
+        console.error('Disconnect error:', error);
       }
     });
   });

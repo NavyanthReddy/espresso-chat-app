@@ -37,8 +37,10 @@ export interface SocketEvents {
   // Client to Server
   authenticate: (user: User) => void;
   join_room: (payload: { roomId: string; user: User }) => void;
+  leave_room: (roomId: string) => void;
   send_message: (payload: { text: string; roomId: string; user: User }) => void;
   get_rooms: () => void;
+  get_my_rooms: () => void;
   create_room: (roomName: string) => void;
 
   // Server to Client
@@ -47,6 +49,7 @@ export interface SocketEvents {
   user_left: (data: { user: User; roomId: string }) => void;
   message_received: (message: Message) => void;
   rooms_list: (rooms: RoomSummary[]) => void;
+  my_rooms: (rooms: Room[]) => void;
   room_created: (room: Room) => void;
   room_added: (room: RoomSummary) => void;
   error: (error: { message: string }) => void;

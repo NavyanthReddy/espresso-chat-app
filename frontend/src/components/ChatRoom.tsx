@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { User, Message } from '../types';
 import { socketService } from '../services/socket';
 
@@ -23,6 +24,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({
 }) => {
   const [newMessage, setNewMessage] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const navigate = useNavigate();
 
   useEffect(() => {
     // Set up event listeners
@@ -65,6 +67,11 @@ const ChatRoom: React.FC<ChatRoomProps> = ({
     }
   };
 
+  const handleLeaveRoom = () => {
+    socketService.leaveRoom(roomId);
+    navigate('/');
+  };
+
   const formatTime = (date: Date) => {
     return new Date(date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   };
@@ -73,8 +80,18 @@ const ChatRoom: React.FC<ChatRoomProps> = ({
     <div className="flex flex-col h-full">
       {/* Room Header */}
       <div className="bg-white border-b px-6 py-4">
-        <h2 className="text-lg font-semibold text-gray-900">Room: {roomId}</h2>
-        <p className="text-sm text-gray-500">{users.length} users online</p>
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-lg font-semibold text-gray-900">Room: {roomId}</h2>
+            <p className="text-sm text-gray-500">{users.length} users online</p>
+          </div>
+          <button
+            onClick={handleLeaveRoom}
+            className="px-4 py-2 bg-red-500 text-white rounded-md hover:bg-red-600 focus:outline-none focus:ring-2 focus:ring-red-500"
+          >
+            Leave Room
+          </button>
+        </div>
       </div>
 
       <div className="flex-1 flex">
