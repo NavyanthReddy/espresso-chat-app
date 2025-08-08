@@ -1,6 +1,6 @@
 # Detailed 5-Minute Walkthrough Script for Real-Time Chat App
 
-## 🎯 **OVERVIEW (30 seconds)**
+## 🎯 **OVERVIEW**
 "Hi, I'm Navyanth and today I'll walk you through my real-time chat application built for EspressoLabs. This is a full-stack application featuring real-time messaging, Google authentication, dynamic room management, and online user tracking. Let me show you both the live demo and the key technical implementation."
 
 ---
