@@ -5,9 +5,9 @@
 
 ---
 
-## 📱 **PART 1: LIVE DEMO (2 minutes)**
+## 📱 **PART 1: LIVE DEMO **
 
-### **1.1 Authentication Flow (30 seconds)**
+### **1.1 Authentication Flow **
 **Demo Actions:**
 - Open the application in browser
 - Show the clean login page with Google sign-in button
@@ -17,7 +17,7 @@
 **What to Say:**
 "Here's the login page. Users authenticate with their Google account using Firebase Authentication. Once signed in, their profile information is seamlessly integrated into the chat experience."
 
-### **1.2 Room Management (45 seconds)**
+### **1.2 Room Management **
 **Demo Actions:**
 - Show the home page with room list
 - Create a new room: "Let's create 'Demo Room'"
@@ -27,7 +27,7 @@
 **What to Say:**
 "On the home page, users can see all available rooms and create new ones dynamically. Notice how the room list updates in real-time when a new room is created - this is powered by Socket.IO."
 
-### **1.3 Real-Time Chat (45 seconds)**
+### **1.3 Real-Time Chat **
 **Demo Actions:**
 - Open incognito window/second browser
 - Sign in with different Google account
@@ -40,9 +40,9 @@
 
 ---
 
-## 💻 **PART 2: CODE WALKTHROUGH (2.5 minutes)**
+## 💻 **PART 2: CODE WALKTHROUGH **
 
-### **2.1 Frontend Architecture (45 seconds)**
+### **2.1 Frontend Architecture **
 **Show Files:**
 - `frontend/src/App.tsx` (lines 1-25)
 - `frontend/src/components/Login.tsx` (lines 1-15)
@@ -63,7 +63,7 @@ useEffect(() => {
 }, []);
 ```
 
-### **2.2 Socket.IO Integration (45 seconds)**
+### **2.2 Socket.IO Integration **
 **Show Files:**
 - `frontend/src/services/socket.ts` (lines 1-30)
 - `frontend/src/pages/Room.tsx` (lines 20-40)
@@ -89,7 +89,7 @@ socketService.onMessageReceived((message) => {
 });
 ```
 
-### **2.3 Backend Socket.IO Server (45 seconds)**
+### **2.3 Backend Socket.IO Server **
 **Show Files:**
 - `backend/src/socket.ts` (lines 40-80)
 - `backend/src/server.ts` (lines 1-20)
@@ -119,7 +119,7 @@ socket.on('join_room', (payload: JoinRoomPayload) => {
 });
 ```
 
-### **2.4 Real-Time Message Handling (30 seconds)**
+### **2.4 Real-Time Message Handling **
 **Show Files:**
 - `backend/src/socket.ts` (lines 90-120)
 - `frontend/src/components/ChatRoom.tsx` (lines 80-100)
@@ -156,7 +156,7 @@ io.to(roomId).emit('message_received', message);
 
 ---
 
-## 🏗️ **PART 3: TECHNICAL HIGHLIGHTS (30 seconds)**
+## 🏗️ **PART 3: TECHNICAL HIGHLIGHTS **
 
 ### **Architecture Overview**
 **What to Say:**
@@ -174,7 +174,7 @@ The codebase is production-ready with proper error handling, TypeScript for type
 
 ## 🎬 **DEMO FLOW SUMMARY**
 
-### **Setup (Before Recording)**
+### **Setup **
 1. Start backend server: `cd backend && npm start`
 2. Start frontend: `cd frontend && npm run dev`
 3. Have two browser windows ready (one incognito)
